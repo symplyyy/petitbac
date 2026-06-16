@@ -1,0 +1,105 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Theme tokens (light by default) ---------- */
+:root {
+  --ink:     20  20  38;   /* text */
+  --stroke:  20  20  38;   /* borders & hard shadows */
+  --paper:   255 234 242;
+  --paper2:  245 215 228;
+  --chalk:   255 250 252;
+  --tomato:  255  61 133;
+  --cobalt:   37  54 235;
+  --mustard: 201 216 255;
+  --moss:     79 209 183;
+  --bubble:  111 200 255;
+  color-scheme: light;
+}
+
+.dark {
+  --ink:     236 222 240;   /* text/icons: soft cream, not stark white */
+  --stroke:   62  52  92;   /* borders & shadows: muted plum, visible but soft */
+  --paper:    18  14  36;   /* deep navy bg */
+  --paper2:   28  22  54;
+  --chalk:    34  26  62;   /* surface — slightly lighter than bg */
+  --tomato:  255  91 158;
+  --cobalt:  124 138 255;
+  --mustard:  90 108 178;
+  --moss:     78 210 184;
+  --bubble:   96 162 230;
+  color-scheme: dark;
+}
+
+html, body {
+  height: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  color: rgb(var(--ink));
+  background-color: rgb(var(--paper));
+  background-image:
+    radial-gradient(rgb(var(--ink) / 0.06) 1px, transparent 1px),
+    radial-gradient(rgb(var(--ink) / 0.04) 1px, transparent 1px);
+  background-size: 22px 22px, 22px 22px;
+  background-position: 0 0, 11px 11px;
+  overscroll-behavior-y: none;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+@layer components {
+  .brut {
+    @apply bg-chalk border-3 border-stroke rounded-2xl shadow-hard;
+  }
+  .brut-lg { @apply brut rounded-3xl shadow-hardlg; }
+
+  .btn-b {
+    @apply inline-flex items-center justify-center gap-2 font-display font-bold rounded-2xl border-3 border-stroke px-5 py-3 text-ink shadow-hard transition-[transform,box-shadow] duration-100 active:translate-x-[3px] active:translate-y-[3px] active:shadow-none select-none;
+  }
+  .btn-b-lg { @apply text-lg px-6 py-4 rounded-3xl shadow-hardlg active:translate-x-[5px] active:translate-y-[5px]; }
+  .btn-tomato { @apply btn-b bg-tomato text-chalk; }
+  .btn-cobalt { @apply btn-b bg-cobalt text-chalk; }
+  .btn-mustard { @apply btn-b bg-mustard; }
+  .btn-moss { @apply btn-b bg-moss text-chalk; }
+  .btn-paper { @apply btn-b bg-paper; }
+  .btn-chalk { @apply btn-b bg-chalk; }
+
+  .input-b {
+    @apply w-full rounded-2xl border-3 border-stroke bg-chalk px-4 py-3 font-bold text-ink outline-none placeholder:text-ink/30 focus:shadow-hard focus:-translate-x-[2px] focus:-translate-y-[2px] transition-[transform,box-shadow] duration-100;
+  }
+
+  .label-b { @apply text-xs font-bold uppercase tracking-[0.18em] text-ink/70; }
+
+  .sticker {
+    @apply inline-flex items-center gap-1.5 rounded-full border-3 border-stroke bg-chalk px-3 py-1 font-display font-bold text-sm shadow-hardsm;
+  }
+  .sticker-tilt-l { transform: rotate(-3deg); }
+  .sticker-tilt-r { transform: rotate(2deg); }
+
+  .halftone::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgb(var(--ink) / 0.22) 1.2px, transparent 1.4px);
+    background-size: 8px 8px;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.5;
+  }
+
+  .tape {
+    @apply inline-block bg-mustard border-3 border-stroke px-3 py-0.5 font-display font-bold uppercase tracking-widest text-xs shadow-hardsm;
+    transform: rotate(-1.5deg);
+  }
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--ink) / 0.25); border-radius: 999px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
