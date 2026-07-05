@@ -12,6 +12,7 @@ import Avatar from "@/components/Avatar";
 import ThemeToggle from "@/components/ThemeToggle";
 import { IArrowLeft, ICopy, ICheck, ICrown, IUsers } from "@/components/Icon";
 import { sanitizeAvatar, randomAvatar } from "@/lib/avatar";
+import { getPlayerId, setCurrentRoom, clearCurrentRoom } from "@/lib/identity";
 
 const STORAGE_NAME = "petitbac:name";
 const STORAGE_AVATAR = "petitbac:avatar";
@@ -44,20 +45,29 @@ export default function RoomPage() {
     sock.on("round:result", onResult);
     sock.on("round:start", onRoundStart);
 
+    const playerId = getPlayerId();
     function doJoin() {
-      sock.emit("room:join", { code, name, avatar }, (res: any) => {
-        if (!res?.ok) return setError(res?.error || "Erreur");
+      sock.emit("room:join", { playerId, code, name, avatar }, (res: any) => {
+        if (!res?.ok) {
+          clearCurrentRoom();
+          return setError(res?.error || "Erreur");
+        }
+        setCurrentRoom(code);
         setYou(res.you);
       });
     }
     if (sock.connected) doJoin();
     else sock.once("connect", doJoin);
+    // Auto re-join after a disconnect/reconnect so refreshes or network blips
+    // don't kick the player out of the room.
+    sock.on("connect", doJoin);
     joined.current = true;
 
     return () => {
       sock.off("room:update", onUpdate);
       sock.off("round:result", onResult);
       sock.off("round:start", onRoundStart);
+      sock.off("connect", doJoin);
     };
   }, [code]);
 
@@ -66,7 +76,7 @@ export default function RoomPage() {
       <main className="flex-1 flex flex-col items-center justify-center px-5 text-center gap-4">
         <div className="font-display text-6xl">×_×</div>
         <h2 className="font-display text-2xl font-bold">{error}</h2>
-        <button className="btn-cobalt btn-b-lg" onClick={() => router.push("/")}>
+        <button className="btn-cobalt btn-b-lg" onClick={() => { clearCurrentRoom(); router.push("/"); }}>
           <IArrowLeft size={18} /> Retour à l'accueil
         </button>
       </main>
@@ -88,7 +98,7 @@ export default function RoomPage() {
         room={room}
         isHost={isHost}
         you={you}
-        onLeave={() => { getSocket().emit("room:leave"); router.push("/"); }}
+        onLeave={() => { getSocket().emit("room:leave"); clearCurrentRoom(); router.push("/"); }}
       />
       {room.phase === "lobby" && <Lobby room={room} you={you} isHost={isHost} />}
       {room.phase === "countdown" && <Countdown room={room} result={result} />}

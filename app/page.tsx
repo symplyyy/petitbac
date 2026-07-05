@@ -7,6 +7,7 @@ import AvatarPicker from "@/components/AvatarPicker";
 import Avatar from "@/components/Avatar";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AvatarConfig, DEFAULT_AVATAR, randomAvatar, sanitizeAvatar } from "@/lib/avatar";
+import { getPlayerId, getCurrentRoom, setCurrentRoom, clearCurrentRoom } from "@/lib/identity";
 
 const STORAGE_NAME = "petitbac:name";
 const STORAGE_AVATAR = "petitbac:avatar";
@@ -24,6 +25,11 @@ export default function HomePage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const savedRoom = getCurrentRoom();
+    if (savedRoom) {
+      router.replace(`/room/${savedRoom}`);
+      return;
+    }
     setName(localStorage.getItem(STORAGE_NAME) || "");
     try {
       const raw = localStorage.getItem(STORAGE_AVATAR);
@@ -32,7 +38,7 @@ export default function HomePage() {
       setAvatar(randomAvatar());
     }
     setHydrated(true);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -55,9 +61,10 @@ export default function HomePage() {
   function createRoom() {
     if (!name.trim()) return setError("Choisis un pseudo");
     setLoading(true); setError(null);
-    getSocket().emit("room:create", { name: name.trim(), avatar }, (res: any) => {
+    getSocket().emit("room:create", { playerId: getPlayerId(), name: name.trim(), avatar }, (res: any) => {
       setLoading(false);
       if (!res?.ok) return setError(res?.error || "Erreur");
+      setCurrentRoom(res.code);
       router.push(`/room/${res.code}`);
     });
   }
@@ -66,9 +73,13 @@ export default function HomePage() {
     if (!name.trim()) return setError("Choisis un pseudo");
     if (!code.trim()) return setError("Entre un code");
     setLoading(true); setError(null);
-    getSocket().emit("room:join", { code: code.trim().toUpperCase(), name: name.trim(), avatar }, (res: any) => {
+    getSocket().emit("room:join", { playerId: getPlayerId(), code: code.trim().toUpperCase(), name: name.trim(), avatar }, (res: any) => {
       setLoading(false);
-      if (!res?.ok) return setError(res?.error || "Erreur");
+      if (!res?.ok) {
+        clearCurrentRoom();
+        return setError(res?.error || "Erreur");
+      }
+      setCurrentRoom(res.code);
       router.push(`/room/${res.code}`);
     });
   }

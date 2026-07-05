@@ -210,47 +210,53 @@ function computeScores(room) {
 function registerGameHandlers(io) {
   io.on("connection", (socket) => {
     let joinedCode = null;
+    let joinedAs = null; // persistent playerId
 
-    socket.on("room:create", ({ name, avatar }, cb) => {
-      const room = newRoom(socket.id, (name || "Joueur").slice(0, 20), sanitizeAvatar(avatar));
+    socket.on("room:create", ({ playerId, name, avatar }, cb) => {
+      const pid = String(playerId || socket.id);
+      const room = newRoom(pid, (name || "Joueur").slice(0, 20), sanitizeAvatar(avatar));
       socket.join(room.code);
       joinedCode = room.code;
-      cb?.({ ok: true, code: room.code, you: socket.id });
+      joinedAs = pid;
+      cb?.({ ok: true, code: room.code, you: pid });
       io.to(room.code).emit("room:update", publicRoom(room));
     });
 
-    socket.on("room:join", ({ code, name, avatar }, cb) => {
+    socket.on("room:join", ({ playerId, code, name, avatar }, cb) => {
       code = (code || "").toUpperCase().trim();
+      const pid = String(playerId || socket.id);
       const room = rooms.get(code);
       if (!room) return cb?.({ ok: false, error: "Partie introuvable" });
-      if (room.phase !== "lobby" && !room.players.has(socket.id)) {
+      const known = room.players.has(pid);
+      if (room.phase !== "lobby" && !known) {
         return cb?.({ ok: false, error: "Partie déjà commencée" });
       }
-      if (!room.players.has(socket.id) && room.players.size >= (room.settings.maxPlayers || 12)) {
+      if (!known && room.players.size >= (room.settings.maxPlayers || 12)) {
         return cb?.({ ok: false, error: "Partie pleine" });
       }
-      if (!room.players.has(socket.id)) {
-        room.players.set(socket.id, {
-          id: socket.id,
+      if (!known) {
+        room.players.set(pid, {
+          id: pid,
           name: (name || "Joueur").slice(0, 20),
           avatar: sanitizeAvatar(avatar),
           score: 0, ready: false, connected: true, isHost: false,
         });
       } else {
-        const p = room.players.get(socket.id);
+        const p = room.players.get(pid);
         p.connected = true;
         if (name) p.name = name.slice(0, 20);
         if (avatar) p.avatar = sanitizeAvatar(avatar);
       }
       socket.join(code);
       joinedCode = code;
-      cb?.({ ok: true, code, you: socket.id });
+      joinedAs = pid;
+      cb?.({ ok: true, code, you: pid });
       io.to(code).emit("room:update", publicRoom(room));
     });
 
     socket.on("room:settings", ({ settings }) => {
       const room = rooms.get(joinedCode);
-      if (!room || room.hostId !== socket.id || room.phase !== "lobby") return;
+      if (!room || room.hostId !== joinedAs || room.phase !== "lobby") return;
       const s = settings || {};
       if (Array.isArray(s.categories)) room.settings.categories = s.categories.slice(0, 12).map(String);
       if (typeof s.duration === "number") room.settings.duration = Math.max(15, Math.min(180, s.duration));
@@ -265,7 +271,7 @@ function registerGameHandlers(io) {
 
     socket.on("game:start", () => {
       const room = rooms.get(joinedCode);
-      if (!room || room.hostId !== socket.id) return;
+      if (!room || room.hostId !== joinedAs) return;
       if (room.phase !== "lobby" && room.phase !== "finished") return;
       if (room.players.size < 1) return;
       room.round = 0;
@@ -278,14 +284,14 @@ function registerGameHandlers(io) {
     socket.on("answers:update", ({ answers }) => {
       const room = rooms.get(joinedCode);
       if (!room || room.phase !== "playing") return;
-      room.answers[socket.id] = answers || {};
+      room.answers[joinedAs] = answers || {};
     });
 
     socket.on("game:stop", () => {
       const room = rooms.get(joinedCode);
       if (!room || room.phase !== "playing") return;
       if (room.settings.stopMode !== "first") return;
-      endRound(io, room, socket.id);
+      endRound(io, room, joinedAs);
     });
 
     socket.on("vote:cast", ({ index, value }) => {
@@ -293,14 +299,14 @@ function registerGameHandlers(io) {
       if (!room || room.phase !== "voting") return;
       const item = room.voting.items[index];
       if (!item) return;
-      if (item.playerId === socket.id) return; // pas de vote sur soi
-      item.votes[socket.id] = !!value;
+      if (item.playerId === joinedAs) return; // pas de vote sur soi
+      item.votes[joinedAs] = !!value;
       io.to(room.code).emit("voting:update", { index, votes: item.votes });
     });
 
     socket.on("vote:finish", () => {
       const room = rooms.get(joinedCode);
-      if (!room || room.hostId !== socket.id || room.phase !== "voting") return;
+      if (!room || room.hostId !== joinedAs || room.phase !== "voting") return;
       const gained = computeScores(room);
       const isLast = room.round >= room.settings.totalRounds;
       const result = {
@@ -326,7 +332,7 @@ function registerGameHandlers(io) {
     socket.on("chat:send", ({ text }) => {
       const room = rooms.get(joinedCode);
       if (!room) return;
-      const p = room.players.get(socket.id);
+      const p = room.players.get(joinedAs);
       if (!p) return;
       const msg = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 6), playerId: p.id, name: p.name, text: String(text || "").slice(0, 200), at: Date.now() };
       room.messages.push(msg);
@@ -340,16 +346,16 @@ function registerGameHandlers(io) {
     function leave(isDisconnect = false) {
       const room = rooms.get(joinedCode);
       if (!room) return;
-      const p = room.players.get(socket.id);
+      const p = room.players.get(joinedAs);
       if (!p) return;
       if (isDisconnect) {
         p.connected = false;
       } else {
-        room.players.delete(socket.id);
+        room.players.delete(joinedAs);
       }
       // host transfer if host leaves
-      if (room.hostId === socket.id) {
-        const next = [...room.players.values()].find((pp) => pp.connected && pp.id !== socket.id);
+      if (room.hostId === joinedAs) {
+        const next = [...room.players.values()].find((pp) => pp.connected && pp.id !== joinedAs);
         if (next) {
           room.hostId = next.id;
           next.isHost = true;
