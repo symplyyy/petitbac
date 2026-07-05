@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "node server.js",
+    "build:css": "tailwindcss -i ./app/globals.css -o ./public/styles.css --minify",
+    "prebuild": "npm run build:css",
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
     "lint": "next lint"

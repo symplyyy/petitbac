@@ -1,4 +1,3 @@
-import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
@@ -18,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
+        <link rel="stylesheet" href="/styles.css" />
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>
       <body className="min-h-screen">
