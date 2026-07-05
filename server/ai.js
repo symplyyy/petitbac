@@ -1,7 +1,8 @@
 // Gemini-based answer judge with in-memory cache + batching
 const AI_MODEL = "gemini-2.5-flash";
 const AI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${AI_MODEL}:generateContent`;
-const AI_TIMEOUT_MS = 12000;
+const AI_TIMEOUT_MS = 20000;
+const AI_MAX_RETRIES = 1;
 
 // Cache: key -> { valid, explanation }
 const cache = new Map();
@@ -34,7 +35,7 @@ Réponds STRICTEMENT en JSON, un tableau du même ordre :
 [{"valid": true|false, "explanation": "..."}, ...]`;
 }
 
-async function callGemini(prompt) {
+async function callGeminiOnce(prompt) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("GEMINI_API_KEY missing");
 
@@ -49,6 +50,11 @@ async function callGemini(prompt) {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.2,
+          maxOutputTokens: 2048,
+          // gemini-2.5-flash is a thinking model by default: without this it
+          // burns its output budget on reasoning tokens and returns an empty
+          // string with finishReason=MAX_TOKENS. Force thinking off.
+          thinkingConfig: { thinkingBudget: 0 },
           responseMimeType: "application/json",
           responseSchema: {
             type: "array",
@@ -66,16 +72,42 @@ async function callGemini(prompt) {
     });
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      throw new Error(`Gemini HTTP ${res.status}: ${txt.slice(0, 160)}`);
+      throw new Error(`Gemini HTTP ${res.status}: ${txt.slice(0, 200)}`);
     }
     const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-    const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)) throw new Error("AI did not return an array");
+    const candidate = data?.candidates?.[0];
+    const text = candidate?.content?.parts?.[0]?.text || "";
+    if (!text) {
+      const reason = candidate?.finishReason || "no-text";
+      throw new Error(`Gemini empty response (finishReason=${reason})`);
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Gemini invalid JSON: ${text.slice(0, 120)}`);
+    }
+    if (!Array.isArray(parsed)) throw new Error("Gemini did not return an array");
     return parsed;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function callGemini(prompt) {
+  let lastErr;
+  for (let attempt = 0; attempt <= AI_MAX_RETRIES; attempt++) {
+    try {
+      return await callGeminiOnce(prompt);
+    } catch (e) {
+      lastErr = e;
+      if (attempt < AI_MAX_RETRIES) {
+        console.warn(`[ai] retry ${attempt + 1}/${AI_MAX_RETRIES}: ${e.message}`);
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 /**
@@ -107,10 +139,12 @@ async function validateBatch(letter, items) {
   }
 
   if (toAsk.length) {
+    const t0 = Date.now();
     try {
       const prompt = buildPrompt(letter, toAsk);
       const verdicts = await callGemini(prompt);
-      // best-effort align by index; if length mismatch, mark missing as null
+      const missing = toAsk.length - verdicts.length;
+      console.log(`[ai] batch of ${toAsk.length} judged in ${Date.now() - t0}ms${missing > 0 ? ` (missing ${missing})` : ""}`);
       for (let i = 0; i < toAsk.length; i++) {
         const v = verdicts[i];
         if (v && typeof v.valid === "boolean") {
@@ -121,7 +155,7 @@ async function validateBatch(letter, items) {
         }
       }
     } catch (e) {
-      console.error("[ai] validateBatch failed:", e.message);
+      console.error(`[ai] validateBatch failed after ${Date.now() - t0}ms:`, e.message);
     }
   }
 

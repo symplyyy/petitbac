@@ -191,3 +191,24 @@ export const IList = (p: P) => (
     <circle cx="4" cy="18" r="1" fill="currentColor" />
   </svg>
 );
+
+export const IChat = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 5h16v11H8l-4 4V5z" />
+  </svg>
+);
+
+export const ISend = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 12l16-8-6 16-3-7-7-1z" />
+  </svg>
+);
+
+export const ISmile = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8 14c1 1.5 2.5 2.5 4 2.5S15 15.5 16 14" />
+    <circle cx="9" cy="10" r="1" fill="currentColor" />
+    <circle cx="15" cy="10" r="1" fill="currentColor" />
+  </svg>
+);

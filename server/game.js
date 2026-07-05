@@ -329,6 +329,18 @@ function registerGameHandlers(io) {
       }
     });
 
+    const ALLOWED_REACTIONS = ["👍", "❤️", "😂", "🔥", "👏", "🎉", "😱", "🤔"];
+    let lastReactionAt = 0;
+    socket.on("reaction:send", ({ emoji }) => {
+      const room = rooms.get(joinedCode);
+      if (!room) return;
+      if (!ALLOWED_REACTIONS.includes(emoji)) return;
+      const now = Date.now();
+      if (now - lastReactionAt < 200) return; // simple per-socket rate limit
+      lastReactionAt = now;
+      socket.to(room.code).emit("reaction:show", { emoji, playerId: joinedAs, at: now });
+    });
+
     socket.on("chat:send", ({ text }) => {
       const room = rooms.get(joinedCode);
       if (!room) return;

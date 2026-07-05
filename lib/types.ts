@@ -47,6 +47,20 @@ export type Room = {
   voting: { items: VotingItem[] } | null;
 };
 
+export type ChatMessage = {
+  id: string;
+  playerId: string;
+  name: string;
+  text: string;
+  at: number;
+};
+
+export type ReactionEvent = {
+  emoji: string;
+  playerId: string;
+  at: number;
+};
+
 export type RoundResult = {
   letter: string;
   items: VotingItem[];

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getSocket } from "@/lib/socket";
-import type { Room, VotingItem } from "@/lib/types";
+import type { Player, Room, VotingItem } from "@/lib/types";
 import { IBallot, ICheck, IX, ISparkles } from "./Icon";
 import Avatar from "./Avatar";
 
@@ -83,6 +83,7 @@ export default function Voting({ room, you, isHost }: { room: Room; you: string;
                   key={idx}
                   item={item}
                   you={you}
+                  players={room.players}
                   onVote={(value) => getSocket().emit("vote:cast", { index: idx, value })}
                 />
               ))}
@@ -144,12 +145,19 @@ function PrepLoader({ doneAi, totalAi }: { doneAi: number; totalAi: number }) {
 }
 
 function VoteRow({
-  item, you, onVote,
-}: { item: VotingItem; you: string; onVote: (v: boolean) => void }) {
+  item, you, players, onVote,
+}: { item: VotingItem; you: string; players: Player[]; onVote: (v: boolean) => void }) {
   const mine = item.playerId === you;
   const myVote = item.votes[you];
   const baseline = (typeof item.aiValid === "boolean") ? item.aiValid : item.autoValid;
   const aiPending = item.autoValid && item.answer && typeof item.aiValid !== "boolean";
+
+  const nayIds = Object.entries(item.votes)
+    .filter(([, v]) => v === false)
+    .map(([id]) => id);
+  const nays = nayIds
+    .map((id) => players.find((p) => p.id === id))
+    .filter((p): p is Player => !!p);
 
   const tone = !item.answer
     ? "bg-paper2"
@@ -205,6 +213,27 @@ function VoteRow({
         <div className="mt-2 ml-10 text-[12px] leading-snug text-ink/70 italic flex gap-1.5">
           <ISparkles size={14} className="shrink-0 mt-0.5 opacity-50" />
           <span>{item.aiExplanation}</span>
+        </div>
+      )}
+
+      {/* Refusé par — who voted this answer down */}
+      {nays.length > 0 && (
+        <div className="mt-2 ml-10 flex items-center gap-1.5 flex-wrap text-[11px] font-bold text-ink/70">
+          <span className="inline-flex items-center gap-1 text-tomato">
+            <IX size={12} /> Refusé par
+          </span>
+          {nays.map((p) => (
+            <span
+              key={p.id}
+              className="inline-flex items-center gap-1 rounded-full bg-chalk border-3 border-stroke px-1.5 py-0.5"
+              title={p.name}
+            >
+              <Avatar config={p.avatar} size={16} />
+              <span className="truncate max-w-[80px]">
+                {p.id === you ? "toi" : p.name}
+              </span>
+            </span>
+          ))}
         </div>
       )}
     </div>

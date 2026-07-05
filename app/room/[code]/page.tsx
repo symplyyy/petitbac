@@ -10,6 +10,9 @@ import Voting from "@/components/Voting";
 import Finished from "@/components/Finished";
 import Avatar from "@/components/Avatar";
 import ThemeToggle from "@/components/ThemeToggle";
+import ReactionOverlay from "@/components/ReactionOverlay";
+import ReactionBar from "@/components/ReactionBar";
+import ChatPanel from "@/components/ChatPanel";
 import { IArrowLeft, ICopy, ICheck, ICrown, IUsers } from "@/components/Icon";
 import { sanitizeAvatar, randomAvatar } from "@/lib/avatar";
 import { getPlayerId, setCurrentRoom, clearCurrentRoom } from "@/lib/identity";
@@ -105,6 +108,10 @@ export default function RoomPage() {
       {room.phase === "playing" && <Playing room={room} you={you} />}
       {room.phase === "voting" && <Voting room={room} you={you} isHost={isHost} />}
       {room.phase === "finished" && <Finished room={room} isHost={isHost} />}
+
+      <ReactionOverlay />
+      <ReactionBar phase={room.phase} />
+      <ChatPanel players={room.players} you={you} phase={room.phase} />
     </main>
   );
 }
