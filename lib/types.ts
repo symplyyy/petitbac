@@ -29,6 +29,7 @@ export type VotingItem = {
   autoValid: boolean;
   aiValid?: boolean | null;
   aiExplanation?: string | null;
+  aiFailed?: boolean;
   votes: Record<string, boolean>;
 };
 

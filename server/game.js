@@ -23,6 +23,15 @@ const DEFAULT_CATEGORIES = [
 ];
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter((l) => !["K", "W", "X", "Y", "Z"].includes(l));
 
+// Normalize French letters so "Éléphant"/"école" match "E" and "Œuf" matches "O".
+function stripDiacritics(s) {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/Œ/g, "OE").replace(/œ/g, "oe")
+    .replace(/Æ/g, "AE").replace(/æ/g, "ae");
+}
+
 // In-memory store. For prod use Redis.
 const rooms = new Map();
 
@@ -99,7 +108,10 @@ function endRound(io, room, stoppedBy = null) {
   for (const cat of room.settings.categories) {
     for (const p of room.players.values()) {
       const raw = (room.answers[p.id]?.[cat] || "").trim();
-      const valid = raw.length > 0 && raw[0].toLowerCase() === room.currentLetter.toLowerCase();
+      const stripped = stripDiacritics(raw);
+      const valid =
+        stripped.length > 0 &&
+        stripped[0].toLowerCase() === stripDiacritics(room.currentLetter).toLowerCase();
       items.push({
         category: cat,
         playerId: p.id,
@@ -146,21 +158,24 @@ async function judgeWithAI(io, room) {
     if (v) {
       item.aiValid = v.valid;
       item.aiExplanation = v.explanation || null;
+      item.aiFailed = false;
+      // Only auto-cast votes when we actually have an AI opinion.
+      for (const p of room.players.values()) {
+        if (!p.connected || p.id === item.playerId) continue;
+        if (!(p.id in item.votes)) item.votes[p.id] = item.aiValid;
+      }
     } else {
-      // Fallback so the client never stays in pending state
-      item.aiValid = item.autoValid;
+      // AI unavailable: leave the verdict blank so the UI can show
+      // "non vérifié" instead of silently ticking everything as valid.
+      item.aiValid = null;
       item.aiExplanation = null;
-    }
-    // Auto-cast each connected player's vote to match the AI verdict
-    // (the author gets no vote, and any existing vote is respected)
-    for (const p of room.players.values()) {
-      if (!p.connected || p.id === item.playerId) continue;
-      if (!(p.id in item.votes)) item.votes[p.id] = item.aiValid;
+      item.aiFailed = true;
     }
     updates.push({
       index: idx,
       aiValid: item.aiValid,
       aiExplanation: item.aiExplanation,
+      aiFailed: item.aiFailed,
       votes: item.votes,
     });
   }
@@ -183,7 +198,7 @@ function computeScores(room) {
     let accepted = baseline;
     if (!baseline && upvotes > half) accepted = true;     // overturn rejection by majority upvote
     if (baseline && downvotes > half) accepted = false;   // overturn acceptance by majority downvote
-    if (accepted) validByCat[item.category].push({ playerId: item.playerId, answer: item.answer.trim().toLowerCase() });
+    if (accepted) validByCat[item.category].push({ playerId: item.playerId, answer: stripDiacritics(item.answer.trim().toLowerCase()) });
   }
   const gained = {};
   for (const p of room.players.values()) gained[p.id] = 0;

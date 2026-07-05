@@ -9,6 +9,7 @@ type AiVerdict = {
   index: number;
   aiValid: boolean | null;
   aiExplanation: string | null;
+  aiFailed?: boolean;
   votes?: Record<string, boolean>;
 };
 
@@ -33,6 +34,7 @@ export default function Voting({ room, you, isHost }: { room: Room; you: string;
             ...next[u.index],
             aiValid: u.aiValid,
             aiExplanation: u.aiExplanation,
+            aiFailed: u.aiFailed ?? next[u.index].aiFailed,
             votes: u.votes ?? next[u.index].votes,
           };
         }
@@ -59,7 +61,7 @@ export default function Voting({ room, you, isHost }: { room: Room; you: string;
   }, [room.currentLetter]);
 
   const totalAi = items.filter((it) => it.answer && it.autoValid).length;
-  const doneAi  = items.filter((it) => it.answer && it.autoValid && typeof it.aiValid === "boolean").length;
+  const doneAi  = items.filter((it) => it.answer && it.autoValid && (typeof it.aiValid === "boolean" || it.aiFailed)).length;
   const stillLoading = !forceReveal && totalAi > 0 && doneAi < totalAi;
 
   if (stillLoading) return <PrepLoader doneAi={doneAi} totalAi={totalAi} />;
@@ -150,7 +152,8 @@ function VoteRow({
   const mine = item.playerId === you;
   const myVote = item.votes[you];
   const baseline = (typeof item.aiValid === "boolean") ? item.aiValid : item.autoValid;
-  const aiPending = item.autoValid && item.answer && typeof item.aiValid !== "boolean";
+  const aiPending = item.autoValid && item.answer && typeof item.aiValid !== "boolean" && !item.aiFailed;
+  const aiUnavailable = !!item.aiFailed && item.answer && item.autoValid;
 
   const nayIds = Object.entries(item.votes)
     .filter(([, v]) => v === false)
@@ -184,11 +187,18 @@ function VoteRow({
         {item.answer && item.autoValid && (
           aiPending
             ? <span className="sticker bg-mustard !shadow-none animate-pulse"><ISparkles size={14} /> …</span>
-            : typeof item.aiValid === "boolean"
-              ? <span className={`sticker !shadow-none ${item.aiValid ? "bg-moss text-chalk" : "bg-tomato text-chalk"}`}>
-                  <ISparkles size={14} /> {item.aiValid ? <ICheck size={12} /> : <IX size={12} />}
+            : aiUnavailable
+              ? <span
+                  className="sticker bg-mustard !shadow-none"
+                  title="Vérification IA indisponible — votez à la main"
+                >
+                  <ISparkles size={14} /> ?
                 </span>
-              : null
+              : typeof item.aiValid === "boolean"
+                ? <span className={`sticker !shadow-none ${item.aiValid ? "bg-moss text-chalk" : "bg-tomato text-chalk"}`}>
+                    <ISparkles size={14} /> {item.aiValid ? <ICheck size={12} /> : <IX size={12} />}
+                  </span>
+                : null
         )}
 
         {/* Override buttons — only if it's not your own answer */}
@@ -213,6 +223,14 @@ function VoteRow({
         <div className="mt-2 ml-10 text-[12px] leading-snug text-ink/70 italic flex gap-1.5">
           <ISparkles size={14} className="shrink-0 mt-0.5 opacity-50" />
           <span>{item.aiExplanation}</span>
+        </div>
+      )}
+
+      {/* AI failure notice */}
+      {aiUnavailable && (
+        <div className="mt-2 ml-10 text-[12px] leading-snug text-ink/60 italic flex gap-1.5">
+          <ISparkles size={14} className="shrink-0 mt-0.5 opacity-40" />
+          <span>Vérification IA indisponible — à vous de trancher.</span>
         </div>
       )}
 

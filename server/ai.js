@@ -6,11 +6,23 @@ const AI_MAX_RETRIES = 1;
 
 // Cache: key -> { valid, explanation }
 const cache = new Map();
+const stripDiacritics = (s) =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/Œ/g, "OE").replace(/œ/g, "oe")
+    .replace(/Æ/g, "AE").replace(/æ/g, "ae");
 const cacheKey = (letter, category, ans) =>
-  `${letter.toLowerCase()}|${category.toLowerCase()}|${ans.trim().toLowerCase()}`;
+  `${stripDiacritics(letter).toLowerCase()}|${category.toLowerCase()}|${stripDiacritics(ans).trim().toLowerCase()}`;
 
+let warnedNoKey = false;
 function getApiKey() {
-  return process.env.GEMINI_API_KEY || "";
+  const key = process.env.GEMINI_API_KEY || "";
+  if (!key && !warnedNoKey) {
+    console.error("[ai] GEMINI_API_KEY is not set — every answer will fall back to letter-check only");
+    warnedNoKey = true;
+  }
+  return key;
 }
 
 function buildPrompt(letter, toAsk) {

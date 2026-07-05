@@ -5,6 +5,9 @@ import type { ChatMessage, Phase, Player } from "@/lib/types";
 import Avatar from "./Avatar";
 import { IChat, ISend, IX } from "./Icon";
 
+const TOAST_MS = 4500;
+const MAX_TOASTS = 3;
+
 export default function ChatPanel({
   players,
   you,
@@ -18,29 +21,36 @@ export default function ChatPanel({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [unread, setUnread] = useState(0);
+  const [toasts, setToasts] = useState<ChatMessage[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const openRef = useRef(open);
+  useEffect(() => { openRef.current = open; }, [open]);
 
   useEffect(() => {
     const sock = getSocket();
     const onMsg = (m: ChatMessage) => {
       setMessages((prev) => [...prev.slice(-99), m]);
+      if (openRef.current || m.playerId === you) return;
+      setUnread((n) => n + 1);
+      setToasts((prev) => {
+        const next = [...prev, m];
+        return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next;
+      });
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== m.id));
+      }, TOAST_MS);
     };
     sock.on("chat:msg", onMsg);
     return () => {
       sock.off("chat:msg", onMsg);
     };
-  }, []);
-
-  useEffect(() => {
-    const last = messages[messages.length - 1];
-    if (!last) return;
-    if (!open && last.playerId !== you) setUnread((n) => n + 1);
-  }, [messages, open, you]);
+  }, [you]);
 
   useEffect(() => {
     if (!open) return;
     setUnread(0);
+    setToasts([]);
     const t = window.setTimeout(() => {
       if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
       inputRef.current?.focus();
@@ -65,9 +75,54 @@ export default function ChatPanel({
   }
 
   const bottomClass = phase === "playing" ? "bottom-24" : "bottom-3";
+  const toastsBottomClass = phase === "playing" ? "bottom-[9.5rem]" : "bottom-20";
+
+  function dismissToast(id: string) {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }
 
   return (
     <>
+      {!open && toasts.length > 0 && (
+        <div
+          aria-live="polite"
+          className={`fixed ${toastsBottomClass} right-3 z-40 flex flex-col items-end gap-2 w-[min(20rem,calc(100vw-1.5rem))] pointer-events-none`}
+        >
+          {toasts.map((m) => {
+            const p = players.find((pp) => pp.id === m.playerId);
+            const openFromToast = () => { dismissToast(m.id); setOpen(true); };
+            return (
+              <div
+                key={m.id}
+                role="button"
+                tabIndex={0}
+                onClick={openFromToast}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openFromToast(); } }}
+                className="pointer-events-auto cursor-pointer w-full text-left animate-slidein bg-chalk border-3 border-stroke rounded-2xl shadow-hard px-3 py-2 flex items-center gap-2 active:translate-x-[2px] active:translate-y-[2px] active:shadow-hardsm transition-transform"
+              >
+                {p?.avatar && (
+                  <div className="shrink-0"><Avatar config={p.avatar} size={28} /></div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-ink/50 truncate">
+                    {m.name}
+                  </div>
+                  <div className="text-sm font-bold truncate">{m.text}</div>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Fermer"
+                  onClick={(e) => { e.stopPropagation(); dismissToast(m.id); }}
+                  className="shrink-0 w-6 h-6 rounded-lg text-ink/50 hover:text-ink flex items-center justify-center"
+                >
+                  <IX size={14} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => setOpen(true)}
